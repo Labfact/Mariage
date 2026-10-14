@@ -231,6 +231,18 @@ textarea::placeholder{color:var(--mute)}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:11px;min-height:40px;padding:0 14px;font-weight:600}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+
+/* actualités : encadré affiché une fois par version */
+#news{position:fixed;z-index:20;left:12px;right:12px;top:calc(var(--barh,150px) + 8px);max-width:440px;margin:0 auto;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow),0 0 0 .5px rgba(0,0,0,.1);padding:16px 16px 12px 18px;display:none}
+#news.on{display:block;animation:newsin .4s var(--ease)}
+#news small{display:inline-block;background:var(--fav);color:#fff;border-radius:99px;padding:2px 10px;font-weight:700;font-size:12px;letter-spacing:.02em;text-transform:uppercase}
+#news h2{margin:8px 0 6px;font:600 19px/1.25 -apple-system,"SF Pro Display","Inter",sans-serif;letter-spacing:-.01em}
+#news ul{margin:0 0 12px;padding-left:18px;color:var(--mute);font-size:14.5px;display:grid;gap:4px}
+#news ul b{color:var(--ink);font-weight:600}
+#news button{border:0;background:var(--ink);color:#fff;border-radius:12px;min-height:44px;padding:0 18px;font-weight:600}
+@media (min-width:1000px){#news{margin:0;left:24px;right:auto;width:440px}}
+@keyframes newsin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#news.on{animation:none}}
 </style>
 </head>
 <body data-view="map">
@@ -279,6 +291,7 @@ textarea::placeholder{color:var(--mute)}
       <div class="pfoot"><button class="clear" id="reset">Tout effacer</button><button class="cta" id="apply">Afficher 0 lieux</button></div>
     </section>
 <nav class="nav" aria-label="Affichage"><button id="vlist" aria-pressed="false"><span data-ic="list"></span>Liste</button><button id="vmap" aria-pressed="true"><span data-ic="map"></span>Carte</button></nav>
+<aside id="news" aria-labelledby="news-t"></aside>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="modal" role="dialog" aria-modal="true" aria-label="Fiche du lieu"><div class="sheet" id="sheet"></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -331,6 +344,15 @@ function renderArch(){
   box.replaceChildren();
   if(!A.length){box.append(el("p",{class:"hint"},"Aucun lieu archivé pour l'instant."));return}
   A.forEach(v=>box.append(el("div",{class:"arow"},el("div",{},el("b",{},v.n),el("small",{},v.c+" · "+v.z)),el("button",{"aria-label":"Réactiver "+v.n,onclick(){setArch(v,false);toast("« "+v.n+" » réactivé")}},"Réactiver"))));
+}
+/* actualités : changer id + contenu à chaque nouvelle version pour réafficher l'encadré */
+const NEWS={id:"2026-10-14",title:"Archivez les lieux qui ne vous conviennent pas",items:["<b>Archiver ce lieu</b> : bouton en bas de chaque fiche. Le lieu n'est plus proposé, ni dans la liste ni sur la carte.","<b>Retrouvez vos archives</b> dans Filtres, section « Lieux archivés », et réactivez un lieu quand vous voulez."]};
+function showNews(){
+  let seen=null;try{seen=localStorage.getItem("lieux-mariage-news")}catch(e){}
+  if(seen===NEWS.id)return;
+  const n=$("news");n.replaceChildren(el("small",{},"Nouvelle version"),el("h2",{id:"news-t"},NEWS.title),el("ul",{}),el("button",{onclick(){n.classList.remove("on");try{localStorage.setItem("lieux-mariage-news",NEWS.id)}catch(e){}}},"Compris"));
+  NEWS.items.forEach(h=>{const li=el("li");li.innerHTML=h;n.querySelector("ul").append(li)});
+  n.classList.add("on");
 }
 const isDesktop=()=>matchMedia("(min-width:1000px)").matches;
 
@@ -492,7 +514,7 @@ document.addEventListener("keydown",e=>{
 const fitAll=()=>{map.invalidateSize();const f=S.list.map(v=>[v.lat,v.lng]);if(f.length)map.fitBounds(f,{padding:[40,40]})};
 const setBarH=()=>document.documentElement.style.setProperty("--barh",$("bar").offsetHeight+"px");
 matchMedia("(min-width:1000px)").addEventListener("change",()=>{openPanel(false);setBarH();map.invalidateSize()});
-render();setBarH();addEventListener("resize",setBarH);
+render();setBarH();showNews();addEventListener("resize",setBarH);
 addEventListener("load",()=>setTimeout(()=>{setBarH();fitAll()},150));
 </script>
 </body>
