@@ -218,6 +218,19 @@ textarea::placeholder{color:var(--mute)}
 }
 @media (max-width:640px){dl{grid-template-columns:1fr;gap:2px}dt{margin-top:10px}dt:first-child{margin-top:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* archives */
+.arch{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border:1px solid rgba(0,0,0,.2);background:transparent;border-radius:16px;font-weight:600;font-size:15.5px;color:var(--ink)}
+.arch:active{background:rgba(0,0,0,.05)}
+.archhint{margin:6px 2px 0;color:var(--mute);font-size:13.5px;text-align:center}
+.alist{display:grid;gap:8px;margin-top:6px}
+.arow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface2);border-radius:14px;padding:10px 10px 10px 16px}
+.arow div{min-width:0}.arow b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arow small{color:var(--mute)}
+.arow button{flex:none;border:1px solid var(--ink);background:#fff;border-radius:12px;min-height:44px;padding:0 14px;font-weight:600;font-size:14.5px}
+#toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translate(-50%,16px);z-index:300;display:flex;align-items:center;gap:14px;max-width:min(92vw,460px);background:var(--ink);color:#fff;border-radius:16px;padding:8px 8px 8px 18px;font-size:15px;opacity:0;pointer-events:none;transition:opacity .25s,transform .35s var(--ease)}
+#toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#toast button{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:11px;min-height:40px;padding:0 14px;font-weight:600}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
 </head>
 <body data-view="map">
@@ -260,11 +273,13 @@ textarea::placeholder{color:var(--mute)}
           <button class="sw" id="favs" aria-pressed="false">Seulement mes favoris<i></i></button>
           <button class="sw" id="hide" aria-pressed="true">Masquer les écartés<i></i></button>
         </div>
+        <div class="sec"><h3>Lieux archivés <span id="acount"></span></h3><p class="hint">Les lieux archivés ne sont plus proposés, ni dans la liste ni sur la carte. Vous pouvez les réactiver à tout moment.</p><div class="alist" id="alist"></div></div>
         <div class="sec"><h3>Ma shortlist</h3><p class="hint">Favoris, lieux à contacter et visités, avec vos notes.</p><button class="outline" id="copy">Copier ma shortlist</button></div>
       </div>
       <div class="pfoot"><button class="clear" id="reset">Tout effacer</button><button class="cta" id="apply">Afficher 0 lieux</button></div>
     </section>
 <nav class="nav" aria-label="Affichage"><button id="vlist" aria-pressed="false"><span data-ic="list"></span>Liste</button><button id="vmap" aria-pressed="true"><span data-ic="map"></span>Carte</button></nav>
+<div id="toast" role="status" aria-live="polite"></div>
 <div id="modal" role="dialog" aria-modal="true" aria-label="Fiche du lieu"><div class="sheet" id="sheet"></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
@@ -304,6 +319,19 @@ let store={};try{store=JSON.parse(localStorage.getItem("lieux-mariage-v2")||"{}"
 const save=()=>{try{localStorage.setItem("lieux-mariage-v2",JSON.stringify(store))}catch(e){}};
 const st=v=>(store[v.k]||{}).s;
 const setSt=(v,s)=>{const cur=st(v);store[v.k]={...(store[v.k]||{}),s:cur===s?undefined:s};save();render();if($("modal").classList.contains("on"))paintDock(v)};
+/* archives : un lieu archivé n'est plus proposé (liste, carte, compteur) mais reste réactivable ; statut et notes sont conservés */
+const isArch=v=>!!(store[v.k]||{}).arch;
+let toastT;
+function toast(msg,undo){const t=$("toast");t.replaceChildren(el("span",{},msg));if(undo)t.append(el("button",{onclick(){clearTimeout(toastT);t.classList.remove("on");undo()}},"Annuler"));t.classList.add("on");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("on"),6000)}
+function setArch(v,on){store[v.k]={...(store[v.k]||{}),arch:on?true:undefined};save();render()}
+function archive(v){setArch(v,true);if($("modal").classList.contains("on"))closeModal();toast("« "+v.n+" » archivé",()=>setArch(v,false))}
+function renderArch(){
+  const A=V.filter(isArch).sort((a,b)=>a.n.localeCompare(b.n,"fr")),box=$("alist");
+  $("acount").textContent=A.length?"("+A.length+")":"";
+  box.replaceChildren();
+  if(!A.length){box.append(el("p",{class:"hint"},"Aucun lieu archivé pour l'instant."));return}
+  A.forEach(v=>box.append(el("div",{class:"arow"},el("div",{},el("b",{},v.n),el("small",{},v.c+" · "+v.z)),el("button",{"aria-label":"Réactiver "+v.n,onclick(){setArch(v,false);toast("« "+v.n+" » réactivé")}},"Réactiver"))));
+}
 const isDesktop=()=>matchMedia("(min-width:1000px)").matches;
 
 /* carte */
@@ -340,6 +368,7 @@ const view=v=>{document.body.dataset.view=v;$("vlist").setAttribute("aria-presse
 $("vlist").onclick=()=>view("list");$("vmap").onclick=()=>view("map");
 
 function pass(v){
+  if(isArch(v))return false;
   const cap=+$("cap").value,beds=+$("beds").value,price=+$("price").value,sL=+$("tL").value,sS=+$("tS").value;
   if(S.zone.size&&!S.zone.has(v.z))return false;
   if(S.type.size&&!S.type.has(v.t))return false;
@@ -396,7 +425,7 @@ function render(){
   $("v-tL").textContent=hm(+$("tL").value);$("v-tS").textContent=hm(+$("tS").value);
   const k=$("sort").value,num=x=>x==null?-1:x;
   const L2=V.filter(pass).sort((a,b)=>k==="name"?a.n.localeCompare(b.n,"fr"):k==="price"?(a.pm??1e9)-(b.pm??1e9):k==="tL"?a.tL-b.tL:k==="tS"?a.tS-b.tS:num(b[k==="cap"?"cap":"b"])-num(a[k==="cap"?"cap":"b"]));
-  S.list=L2;
+  S.list=L2;renderArch();
   $("count").textContent=L2.length;$("countl").textContent=L2.length>1?"lieux":"lieu";
   $("apply").textContent="Afficher "+plural(L2.length);
   syncSteps();
@@ -448,7 +477,7 @@ function openModal(id){
   const note=el("textarea",{placeholder:"Mes notes : contact, date de visite, devis…","aria-label":"Mes notes"});note.value=d.note||"";note.oninput=()=>{store[v.k]={...(store[v.k]||{}),note:note.value};save()};
   const ph=el("div",{class:"ph"},v.ph?el("img",{src:v.ph,referrerpolicy:"no-referrer",alt:v.n,onerror(e){e.target.replaceWith(noPhoto("Photo indisponible : voir la fiche de l'annuaire"))}}):noPhoto("Pas de photo disponible : voir la fiche de l'annuaire"));
   sh.append(el("div",{class:"hero"},ph,el("button",{class:"mb x",id:"mx",onclick:closeModal,"aria-label":"Fermer"},ic("x")),el("button",{class:"mb p",onclick(){step(-1)},"aria-label":"Lieu précédent"},ic("left")),el("button",{class:"mb n",onclick(){step(1)},"aria-label":"Lieu suivant"},ic("right"))),
-    el("div",{class:"mbody"},el("div",{},el("span",{class:"tour"},v.t),el("h2",{},v.n),el("div",{class:"where"},`${v.c} · ${v.z}`)),sign(v),v.w?el("div",{class:"warn"},v.w):null,srcbox,dl,links,note),
+    el("div",{class:"mbody"},el("div",{},el("span",{class:"tour"},v.t),el("h2",{},v.n),el("div",{class:"where"},`${v.c} · ${v.z}`)),sign(v),v.w?el("div",{class:"warn"},v.w):null,srcbox,dl,links,note,el("div",{},el("button",{class:"arch",onclick(){archive(v)}},ic("ban"),"Archiver ce lieu"),el("p",{class:"archhint"},"Il ne sera plus proposé. Réactivable depuis les filtres, section « Lieux archivés ».")),),
     el("div",{class:"dock"},el("div",{class:"seg",id:"dock"})));
   paintDock(v);
   $("modal").classList.add("on");document.body.style.overflow="hidden";sh.scrollTop=0;$("mx").focus({preventScroll:true});
