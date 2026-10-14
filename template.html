@@ -242,7 +242,7 @@ textarea::placeholder{color:var(--mute)}
         <div class="sec"><h3>Type de lieu</h3><p class="hint">Château, domaine, salle…</p><div id="types"></div></div>
         <div class="sec"><h3>Capacité et hébergement</h3>
           <div class="row2"><div class="lab">Invités minimum<small>Nombre de convives attendus</small></div><div class="step" data-for="cap" data-min="50" data-max="400" data-step="10"><button type="button" data-d="-1" aria-label="Moins">−</button><span id="v-cap">100</span><button type="button" data-d="1" aria-label="Plus">+</button></div><input type="hidden" id="cap" value="100"></div>
-          <div class="row2"><div class="lab">Couchages minimum<small>Sur place, ou hébergement proche signalé</small></div><div class="step" data-for="beds" data-min="0" data-max="150" data-step="10"><button type="button" data-d="-1" aria-label="Moins">−</button><span id="v-beds">40</span><button type="button" data-d="1" aria-label="Plus">+</button></div><input type="hidden" id="beds" value="40"></div>
+          <div class="row2"><div class="lab">Couchages minimum<small>Sur place : couchages annoncés, ou 2 par chambre. Au-dessus de 40, les lieux sans information sont masqués.</small></div><div class="step" data-for="beds" data-min="0" data-max="150" data-step="10"><button type="button" data-d="-1" aria-label="Moins">−</button><span id="v-beds">40</span><button type="button" data-d="1" aria-label="Plus">+</button></div><input type="hidden" id="beds" value="40"></div>
         </div>
         <div class="sec"><h3>Trajet</h3><p class="hint">Un lieu s'affiche s'il est dans l'une des deux limites.</p>
           <label class="rng"><span>Depuis Lyon</span><output id="v-tL"></output><input id="tL" type="range" min="15" max="120" step="5" value="60"></label>
@@ -297,6 +297,8 @@ V.forEach((v,i)=>{v.id=i;v.k=v.n+"|"+v.c});
 const SRC={mn:"Mariages.net",bb:"Bridebook",ms:"1001salles",ao:"Autre annuaire",web:"Recherche web, non vérifié"};
 function srcOf(v){const u=v.u||"";if(/mariages.net/.test(u))return{k:"mn",l:"Mariages.net"};if(/bridebook.com/.test(u))return{k:"bb",l:"Bridebook"};if(/1001salles/.test(u))return{k:"ms",l:"1001salles"};if(/naboo/.test(u))return{k:"ao",l:"Naboo"};if(/grandsgites/.test(u))return{k:"ao",l:"Grands Gîtes"};return{k:"web",l:"Recherche web"}}
 V.forEach(v=>v.src=srcOf(v));
+/* nombre de chambres annoncé dans le texte d'hébergement (somme des "N chambres") : sert de repli quand les couchages ne sont pas connus, à raison de 2 couchages par chambre */
+V.forEach(v=>{let n=0,f=false;for(const m of (v.bn||"").matchAll(/(\d+)\s+chambres?/gi)){n+=+m[1];f=true}v.rm=f?n:null});
 const S={f:{ti:"",bo:"",ex:""},zone:new Set(),type:new Set(),src:new Set(),unk:true,hide:true,favs:false,photo:false,sel:null,list:[],last:null};
 let store={};try{store=JSON.parse(localStorage.getItem("lieux-mariage-v2")||"{}")}catch(e){}
 const save=()=>{try{localStorage.setItem("lieux-mariage-v2",JSON.stringify(store))}catch(e){}};
@@ -343,7 +345,10 @@ function pass(v){
   if(S.type.size&&!S.type.has(v.t))return false;
   if(S.src.size&&!S.src.has(v.src.k))return false;
   if(v.cap==null?!S.unk:v.cap<cap)return false;
-  if(v.b==null?!S.unk:(v.b<beds&&!v.nr))return false;
+  if(v.b!=null||v.rm!=null){
+    /* couchages connus ≥ minimum, ou chambres × 2 ≥ minimum ; "hébergement proche signalé" ne compte que jusqu'à 40 */
+    if(!((v.b!=null&&v.b>=beds)||(v.rm!=null&&v.rm*2>=beds)||(v.nr&&beds<=40)))return false;
+  }else if(!S.unk||beds>40)return false; /* sans aucune info : masqué dès que le minimum dépasse 40 */
   if(v.pm!=null&&price<20000&&v.pm>price)return false;
   if(!(v.tL<=sL||v.tS<=sS))return false;
   if(S.f.ti!==""&&(v.ti==null||String(v.ti)!==S.f.ti))return false;
